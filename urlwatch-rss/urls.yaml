@@ -1,0 +1,7 @@
+name: Anthropic News
+url: https://www.anthropic.com/news
+---
+name: Example
+url: https://example.com/
+filter:
+  - html2text
