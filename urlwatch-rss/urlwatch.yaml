@@ -1,0 +1,10 @@
+display:
+  new: true
+  error: true
+  unchanged: false
+
+report:
+  text:
+    details: true
+    footer: false
+    line_length: 75
