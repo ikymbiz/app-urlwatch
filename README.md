@@ -8,10 +8,23 @@ GitHub Actions で `thp/urlwatch` を checkout して実行し、変更通知を
 2. GitHubへpushします。
 3. GitHubのリポジトリで `Settings` → `Pages` → `Build and deployment` → `Source` を `GitHub Actions` にします。
 4. Actionsの `pages` workflowを手動実行します。
-5. 公開された `docs/index.html` を開き、監視URLを追加・削除します。
-6. `selection.json` をダウンロードします。
-7. ダウンロードしたファイルを `docs/config/selection.json` として置き換えてpushします。
-8. Actionsの `urlwatch` workflowを手動実行、または定期実行を待ちます。
+5. 公開されたページを開き、監視URLを追加・削除します。
+6. PATを入力して `GitHubに登録` を押します。
+7. `登録後に urlwatch.yml を実行する` にチェックが入っていれば、そのままActionsが実行されます。
+
+## PATに必要な権限
+
+Fine-grained personal access tokenの場合:
+
+- 対象リポジトリを選択
+- Repository permissions:
+  - Contents: Read and write
+  - Actions: Read and write
+
+Classic tokenの場合:
+
+- private repoなら `repo`
+- workflow実行に失敗する場合はActions実行権限を確認してください
 
 ## 公開されるURL
 
