@@ -1,12 +1,12 @@
 import json
 from pathlib import Path
+from urllib.parse import urlparse
 
 import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
-TARGETS_PATH = ROOT / "docs" / "config" / "targets.json"
 SELECTION_PATH = ROOT / "docs" / "config" / "selection.json"
 GENERATED_DIR = ROOT / "generated"
 
@@ -14,33 +14,40 @@ URLS_OUTPUT = GENERATED_DIR / "urls.yaml"
 CONFIG_OUTPUT = GENERATED_DIR / "urlwatch.yaml"
 
 
+def is_valid_http_url(value: str) -> bool:
+    parsed = urlparse(value)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
 def main() -> None:
-    targets_config = json.loads(TARGETS_PATH.read_text(encoding="utf-8"))
     selection = json.loads(SELECTION_PATH.read_text(encoding="utf-8"))
 
-    selected_ids = set(selection.get("selectedTargets", []))
-    targets_by_id = {
-        item["id"]: item
-        for item in targets_config.get("targets", [])
-    }
+    targets = selection.get("targets", [])
+    if not isinstance(targets, list):
+        raise SystemExit("selection.json: targets must be a list.")
 
     jobs = []
 
-    for target_id in selected_ids:
-        target = targets_by_id.get(target_id)
-        if not target:
-            raise SystemExit(f"Unknown target id: {target_id}")
+    for index, target in enumerate(targets, start=1):
+        name = str(target.get("name", "")).strip()
+        url = str(target.get("url", "")).strip()
+
+        if not name:
+            raise SystemExit(f"selection.json: targets[{index}].name is required.")
+
+        if not is_valid_http_url(url):
+            raise SystemExit(f"selection.json: targets[{index}].url must be http or https URL.")
 
         jobs.append({
-            "name": target["name"],
-            "url": target["url"],
+            "name": name,
+            "url": url,
             "headers": {
                 "User-Agent": "urlwatch-github-actions"
             }
         })
 
     if not jobs:
-        raise SystemExit("No targets selected.")
+        raise SystemExit("No URLs configured in docs/config/selection.json.")
 
     GENERATED_DIR.mkdir(exist_ok=True)
 
