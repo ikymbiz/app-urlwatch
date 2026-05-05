@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>urlwatch RSS設定</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 880px;
+      margin: 40px auto;
+      padding: 0 20px;
+      line-height: 1.6;
+      color: #222;
+    }
+
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 14px;
+      padding: 20px;
+      margin: 20px 0;
+      background: #fff;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+    }
+
+    label {
+      display: block;
+      padding: 10px 0;
+      cursor: pointer;
+    }
+
+    input {
+      margin-right: 8px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 18px;
+      background: #111;
+      color: #fff;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    button:hover {
+      opacity: 0.86;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      background: #f6f8fa;
+      border-radius: 10px;
+      padding: 16px;
+      overflow-x: auto;
+    }
+
+    code {
+      background: #f6f8fa;
+      padding: 2px 5px;
+      border-radius: 5px;
+    }
+
+    .muted {
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <h1>urlwatch RSS設定</h1>
+
+  <p class="muted">
+    監視対象URLを選択して、<code>selection.json</code> を生成します。
+    通知は <code>feed.xml</code> にRSSとして出力されます。
+  </p>
+
+  <div class="card">
+    <h2>RSSフィード</h2>
+    <p>GitHub Pages公開後、RSSリーダーには次のURLを登録します。</p>
+    <pre id="feedUrl"></pre>
+  </div>
+
+  <div class="card">
+    <h2>監視対象URL</h2>
+    <div id="targets"></div>
+  </div>
+
+  <button id="download">selection.json をダウンロード</button>
+
+  <div class="card">
+    <h2>プレビュー</h2>
+    <pre id="preview"></pre>
+  </div>
+
+  <script>
+    const targetsEl = document.getElementById("targets");
+    const previewEl = document.getElementById("preview");
+    const downloadBtn = document.getElementById("download");
+    const feedUrlEl = document.getElementById("feedUrl");
+
+    let config = null;
+
+    async function loadConfig() {
+      feedUrlEl.textContent = new URL("feed.xml", location.href).href;
+
+      const res = await fetch("config/targets.json", { cache: "no-store" });
+      config = await res.json();
+
+      renderTargets();
+      updatePreview();
+    }
+
+    function renderTargets() {
+      targetsEl.innerHTML = "";
+
+      for (const target of config.targets) {
+        const label = document.createElement("label");
+        label.innerHTML = `
+          <input type="checkbox" name="target" value="${escapeHtml(target.id)}">
+          <strong>${escapeHtml(target.name)}</strong>
+          <br>
+          <span class="muted">${escapeHtml(target.url)}</span>
+        `;
+        targetsEl.appendChild(label);
+      }
+
+      targetsEl.addEventListener("change", updatePreview);
+    }
+
+    function getSelection() {
+      const selectedTargets = Array.from(document.querySelectorAll('input[name="target"]:checked'))
+        .map((el) => el.value);
+
+      return {
+        selectedTargets
+      };
+    }
+
+    function updatePreview() {
+      previewEl.textContent = JSON.stringify(getSelection(), null, 2);
+    }
+
+    function downloadSelection() {
+      const selection = getSelection();
+
+      if (selection.selectedTargets.length === 0) {
+        alert("監視対象URLを1つ以上選択してください。");
+        return;
+      }
+
+      const blob = new Blob(
+        [JSON.stringify(selection, null, 2) + "\n"],
+        { type: "application/json" }
+      );
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "selection.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    downloadBtn.addEventListener("click", downloadSelection);
+
+    loadConfig().catch((error) => {
+      document.body.innerHTML = `
+        <h1>読み込みエラー</h1>
+        <p><code>docs/config/targets.json</code> を読み込めませんでした。</p>
+        <pre>${escapeHtml(error.message)}</pre>
+      `;
+    });
+  </script>
+</body>
+</html>
