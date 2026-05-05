@@ -1,20 +1,27 @@
-# urlwatch RSS on GitHub Actions
+# urlwatch RSS on GitHub Pages
 
-GitHub Actions で `thp/urlwatch` を checkout して実行し、変更通知を `docs/feed.xml` にRSSとして追記する構成です。
+GitHub Actions で `thp/urlwatch` を checkout して実行し、変更通知を `docs/feed.xml` にRSSとして追記し、GitHub Pagesへ公開する構成です。
 
 ## 使い方
 
 1. このZIPの中身をGitHubリポジトリのルートに展開します。
-2. `docs/config/targets.json` に監視候補URLを追加します。
-3. GitHubへpushします。
-4. GitHub Pagesを `main` ブランチの `/docs` から公開します。
-5. `docs/index.html` を開き、監視対象を選んで `selection.json` をダウンロードします。
-6. ダウンロードしたファイルを `docs/config/selection.json` として置き換えてpushします。
-7. Actionsの `urlwatch` workflowを手動実行、または定期実行を待ちます。
+2. GitHubへpushします。
+3. GitHubのリポジトリで `Settings` → `Pages` → `Build and deployment` → `Source` を `GitHub Actions` にします。
+4. Actionsの `pages` workflowを手動実行します。
+5. 公開された `docs/index.html` を開き、監視URLを追加・削除します。
+6. `selection.json` をダウンロードします。
+7. ダウンロードしたファイルを `docs/config/selection.json` として置き換えてpushします。
+8. Actionsの `urlwatch` workflowを手動実行、または定期実行を待ちます。
 
-## RSS URL
+## 公開されるURL
 
 通常は次の形式です。
+
+```text
+https://<GitHubユーザー名>.github.io/<リポジトリ名>/
+```
+
+RSSは次のURLです。
 
 ```text
 https://<GitHubユーザー名>.github.io/<リポジトリ名>/feed.xml
@@ -28,22 +35,22 @@ https://<GitHubユーザー名>.github.io/<リポジトリ名>/feed.xml
 RSS_SITE_URL=https://example.com
 ```
 
-## ファイル構成
+## selection.json の形式
 
-```text
-.github/workflows/urlwatch.yml
-docs/index.html
-docs/feed.xml
-docs/config/targets.json
-docs/config/selection.json
-scripts/build-urlwatch-config.py
-scripts/rss_reporter.py
-.gitignore
-README.md
+```json
+{
+  "targets": [
+    {
+      "name": "Example",
+      "url": "https://example.com/"
+    }
+  ]
+}
 ```
 
 ## メモ
 
-- 初回実行では履歴作成のみでRSS itemが増えないことがあります。
+- `pages` workflowは、通常のpush時に `docs/` をGitHub Pagesへ公開します。
+- `urlwatch` workflowは、urlwatch実行後に `docs/feed.xml` を更新し、そのままGitHub Pagesへ再デプロイします。
+- 初回のurlwatch実行では履歴作成のみでRSS itemが増えないことがあります。
 - 2回目以降、監視対象に差分があると `docs/feed.xml` にitemが追加されます。
-- `docs/feed.xml` はActionsが自動コミットします。
