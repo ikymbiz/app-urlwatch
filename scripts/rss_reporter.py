@@ -21,8 +21,6 @@ def default_site_url() -> str:
         return "https://example.com"
 
     owner, name = repo.split("/", 1)
-
-    # 通常の GitHub project pages 用。custom domain の場合は RSS_SITE_URL を使う。
     return f"https://{owner}.github.io/{name}"
 
 
@@ -131,10 +129,8 @@ def append_item(report: str) -> None:
 
 def main() -> None:
     report = sys.stdin.read().strip()
-
     if not report:
         return
-
     append_item(report)
 
 
