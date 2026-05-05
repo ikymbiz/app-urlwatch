@@ -5,13 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>urlwatch RSS設定</title>
   <style>
+    :root {
+      color-scheme: light;
+    }
+
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      max-width: 880px;
+      max-width: 920px;
       margin: 40px auto;
       padding: 0 20px;
       line-height: 1.6;
       color: #222;
+      background: #fafafa;
+    }
+
+    h1 {
+      margin-bottom: 8px;
     }
 
     .card {
@@ -23,14 +32,34 @@
       box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
     }
 
-    label {
-      display: block;
-      padding: 10px 0;
-      cursor: pointer;
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 2fr auto;
+      gap: 10px;
+      align-items: end;
     }
 
-    input {
-      margin-right: 8px;
+    @media (max-width: 760px) {
+      .row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    label {
+      display: block;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="url"] {
+      box-sizing: border-box;
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 11px 12px;
+      font: inherit;
+      background: #fff;
     }
 
     button {
@@ -41,10 +70,54 @@
       color: #fff;
       cursor: pointer;
       font-weight: 700;
+      font: inherit;
     }
 
     button:hover {
       opacity: 0.86;
+    }
+
+    button.secondary {
+      background: #f0f0f0;
+      color: #222;
+    }
+
+    button.danger {
+      background: #b42318;
+      color: #fff;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .target-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .target {
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 14px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: start;
+      background: #fff;
+    }
+
+    .target strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .target code {
+      word-break: break-all;
     }
 
     pre {
@@ -64,14 +137,22 @@
     .muted {
       color: #666;
     }
+
+    .notice {
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: #7c2d12;
+    }
   </style>
 </head>
 <body>
   <h1>urlwatch RSS設定</h1>
 
   <p class="muted">
-    監視対象URLを選択して、<code>selection.json</code> を生成します。
-    通知は <code>feed.xml</code> にRSSとして出力されます。
+    監視するURLをこの画面で追加・削除し、<code>selection.json</code> を生成します。
+    Actionsは <code>docs/config/selection.json</code> を読んで実行し、差分を <code>docs/feed.xml</code> にRSSとして出力します。
   </p>
 
   <div class="card">
@@ -81,11 +162,40 @@
   </div>
 
   <div class="card">
-    <h2>監視対象URL</h2>
-    <div id="targets"></div>
+    <h2>URLを追加</h2>
+
+    <div class="row">
+      <div>
+        <label for="name">表示名</label>
+        <input id="name" type="text" placeholder="例: urlwatch Releases" />
+      </div>
+
+      <div>
+        <label for="url">URL</label>
+        <input id="url" type="url" placeholder="https://example.com/" />
+      </div>
+
+      <button id="add" type="button">追加</button>
+    </div>
+
+    <p class="muted">
+      RSS、Atom、通常のWebページURLを登録できます。URLは <code>http://</code> または <code>https://</code> で始めてください。
+    </p>
   </div>
 
-  <button id="download">selection.json をダウンロード</button>
+  <div class="card">
+    <h2>監視URL一覧</h2>
+    <div id="targetList" class="target-list"></div>
+    <p id="emptyMessage" class="notice" hidden>
+      まだURLがありません。上のフォームから追加してください。
+    </p>
+  </div>
+
+  <div class="button-row">
+    <button id="download" type="button">selection.json をダウンロード</button>
+    <button id="copy" type="button" class="secondary">JSONをコピー</button>
+    <button id="reset" type="button" class="danger">画面上の変更をリセット</button>
+  </div>
 
   <div class="card">
     <h2>プレビュー</h2>
@@ -93,63 +203,136 @@
   </div>
 
   <script>
-    const targetsEl = document.getElementById("targets");
-    const previewEl = document.getElementById("preview");
+    const STORAGE_KEY = "urlwatch-rss-selection-v2";
+
+    const nameEl = document.getElementById("name");
+    const urlEl = document.getElementById("url");
+    const addBtn = document.getElementById("add");
     const downloadBtn = document.getElementById("download");
+    const copyBtn = document.getElementById("copy");
+    const resetBtn = document.getElementById("reset");
+    const targetListEl = document.getElementById("targetList");
+    const emptyMessageEl = document.getElementById("emptyMessage");
+    const previewEl = document.getElementById("preview");
     const feedUrlEl = document.getElementById("feedUrl");
 
-    let config = null;
+    let targets = [];
 
-    async function loadConfig() {
+    async function loadInitialSelection() {
       feedUrlEl.textContent = new URL("feed.xml", location.href).href;
 
-      const res = await fetch("config/targets.json", { cache: "no-store" });
-      config = await res.json();
-
-      renderTargets();
-      updatePreview();
-    }
-
-    function renderTargets() {
-      targetsEl.innerHTML = "";
-
-      for (const target of config.targets) {
-        const label = document.createElement("label");
-        label.innerHTML = `
-          <input type="checkbox" name="target" value="${escapeHtml(target.id)}">
-          <strong>${escapeHtml(target.name)}</strong>
-          <br>
-          <span class="muted">${escapeHtml(target.url)}</span>
-        `;
-        targetsEl.appendChild(label);
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          targets = normalizeTargets(parsed.targets || []);
+          render();
+          return;
+        } catch {
+          localStorage.removeItem(STORAGE_KEY);
+        }
       }
 
-      targetsEl.addEventListener("change", updatePreview);
+      try {
+        const res = await fetch("config/selection.json", { cache: "no-store" });
+        const selection = await res.json();
+        targets = normalizeTargets(selection.targets || []);
+      } catch {
+        targets = [];
+      }
+
+      render();
+    }
+
+    function normalizeTargets(items) {
+      return items
+        .map((item) => ({
+          name: String(item.name || "").trim(),
+          url: String(item.url || "").trim()
+        }))
+        .filter((item) => item.name && isValidHttpUrl(item.url));
+    }
+
+    function addTarget() {
+      const name = nameEl.value.trim();
+      const url = urlEl.value.trim();
+
+      if (!name) {
+        alert("表示名を入力してください。");
+        nameEl.focus();
+        return;
+      }
+
+      if (!isValidHttpUrl(url)) {
+        alert("URLは http:// または https:// で始まる正しいURLにしてください。");
+        urlEl.focus();
+        return;
+      }
+
+      if (targets.some((target) => target.url === url)) {
+        alert("このURLはすでに追加されています。");
+        return;
+      }
+
+      targets.push({ name, url });
+      nameEl.value = "";
+      urlEl.value = "";
+      saveToLocalStorage();
+      render();
+    }
+
+    function removeTarget(index) {
+      targets.splice(index, 1);
+      saveToLocalStorage();
+      render();
     }
 
     function getSelection() {
-      const selectedTargets = Array.from(document.querySelectorAll('input[name="target"]:checked'))
-        .map((el) => el.value);
-
       return {
-        selectedTargets
+        targets
       };
     }
 
-    function updatePreview() {
+    function render() {
+      targetListEl.innerHTML = "";
+      emptyMessageEl.hidden = targets.length !== 0;
+
+      targets.forEach((target, index) => {
+        const item = document.createElement("div");
+        item.className = "target";
+
+        const body = document.createElement("div");
+        body.innerHTML = `
+          <strong>${escapeHtml(target.name)}</strong>
+          <code>${escapeHtml(target.url)}</code>
+        `;
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "danger";
+        removeBtn.textContent = "削除";
+        removeBtn.addEventListener("click", () => removeTarget(index));
+
+        item.appendChild(body);
+        item.appendChild(removeBtn);
+        targetListEl.appendChild(item);
+      });
+
       previewEl.textContent = JSON.stringify(getSelection(), null, 2);
     }
 
-    function downloadSelection() {
-      const selection = getSelection();
+    function saveToLocalStorage() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(getSelection()));
+    }
 
-      if (selection.selectedTargets.length === 0) {
-        alert("監視対象URLを1つ以上選択してください。");
+    function downloadSelection() {
+      if (targets.length === 0) {
+        alert("監視URLを1つ以上追加してください。");
         return;
       }
 
       const blob = new Blob(
-        [JSON.stringify(selection, null, 2) + "\n"],
+        [JSON.stringify(getSelection(), null, 2) + "\n"],
         { type: "application/json" }
       );
 
@@ -161,6 +344,29 @@
       URL.revokeObjectURL(url);
     }
 
+    async function copyJson() {
+      await navigator.clipboard.writeText(JSON.stringify(getSelection(), null, 2) + "\n");
+      alert("JSONをコピーしました。");
+    }
+
+    function resetChanges() {
+      if (!confirm("画面上の変更をリセットして、リポジトリ上の selection.json を読み直しますか？")) {
+        return;
+      }
+
+      localStorage.removeItem(STORAGE_KEY);
+      loadInitialSelection();
+    }
+
+    function isValidHttpUrl(value) {
+      try {
+        const url = new URL(value);
+        return url.protocol === "http:" || url.protocol === "https:";
+      } catch {
+        return false;
+      }
+    }
+
     function escapeHtml(value) {
       return String(value)
         .replaceAll("&", "&amp;")
@@ -170,15 +376,15 @@
         .replaceAll("'", "&#039;");
     }
 
-    downloadBtn.addEventListener("click", downloadSelection);
-
-    loadConfig().catch((error) => {
-      document.body.innerHTML = `
-        <h1>読み込みエラー</h1>
-        <p><code>docs/config/targets.json</code> を読み込めませんでした。</p>
-        <pre>${escapeHtml(error.message)}</pre>
-      `;
+    addBtn.addEventListener("click", addTarget);
+    urlEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") addTarget();
     });
+    downloadBtn.addEventListener("click", downloadSelection);
+    copyBtn.addEventListener("click", copyJson);
+    resetBtn.addEventListener("click", resetChanges);
+
+    loadInitialSelection();
   </script>
 </body>
 </html>
