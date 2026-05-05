@@ -1,0 +1,14 @@
+{
+  "targets": [
+    {
+      "id": "urlwatch-releases",
+      "name": "urlwatch Releases",
+      "url": "https://github.com/thp/urlwatch/releases.atom"
+    },
+    {
+      "id": "urlwatch-homepage",
+      "name": "urlwatch Homepage",
+      "url": "https://thp.io/2008/urlwatch/"
+    }
+  ]
+}
